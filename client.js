@@ -36,7 +36,7 @@ window.__ModuleLoader__.load({
         if (!result.ok) throw new Error(result.error?.message ?? 'DSH 未接受这条消息')
       }
       const style = document.createElement('style')
-      style.textContent = '.dsh-synapse-map-tab{margin-left:4px}.dsh-synapse-canvas{display:flex!important;flex:1 1 auto;min-height:0;height:100%;width:100%}.dsh-synapse-canvas iframe{display:block;width:100%;height:100%;border:0;flex:1;background:#f5f7fa}'
+      style.textContent = '.dsh-synapse-map-tab{margin-left:4px}.Md3f7G_root.dsh-synapse-map-root,.Md3f7G_root.dsh-synapse-map-root .Md3f7G_scroll{display:flex!important;flex:1 1 0%!important;min-height:0!important;height:100%!important}.dsh-synapse-canvas{display:flex!important;flex:1 1 0%!important;min-height:0!important;height:100%!important;width:100%}.dsh-synapse-canvas iframe{display:block;width:100%;height:100%;border:0;flex:1;background:#f5f7fa}'
       document.head.append(style)
       const host = document.createElement('div')
       host.className = 'dsh-synapse-host'
@@ -45,6 +45,7 @@ window.__ModuleLoader__.load({
       const canvas = host.querySelector('.dsh-synapse-canvas')
       const frame = host.querySelector('iframe')
       let scroll = null
+      let mapRoot = null
       let dialogContents = null
       let mapVisible = false
       let nativeActiveClasses = []
@@ -78,8 +79,10 @@ window.__ModuleLoader__.load({
       const close = () => {
         if (!mapVisible) return
         if (scroll !== null && dialogContents !== null) scroll.replaceChildren(...dialogContents)
+        mapRoot?.classList.remove('dsh-synapse-map-root')
         document.body.append(host)
         scroll = null
+        mapRoot = null
         dialogContents = null
         mapVisible = false
         syncNativeTabs()
@@ -140,6 +143,8 @@ window.__ModuleLoader__.load({
         const target = scrollContainer()
         if (target === null) return
         scroll = target
+        mapRoot = scroll.closest('.Md3f7G_root')
+        mapRoot?.classList.add('dsh-synapse-map-root')
         dialogContents = [...scroll.childNodes]
         scroll.replaceChildren(canvas)
         mapVisible = true
