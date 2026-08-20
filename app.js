@@ -492,12 +492,12 @@ function refreshCardConnectors(cardId) {
 }
 
 function initialCanvasCamera(cards) {
-  const draft = state.draft?.kind === 'new' ? { id: 'draft:new', position: { x: 86, y: 82 } } : draftPlacement(cards)
-  const active = state.activeId === null ? undefined : cards.find(card => card.dshThreadId === state.activeId)
-  const focus = draft ?? active ?? cards[0]
-  const position = focus?.position
-  if (position === undefined) return { x: 0, y: 0 }
-  return { x: CAMERA_INSET_X - position.x * state.zoom, y: CAMERA_INSET_Y - position.y * state.zoom }
+  if (state.draft?.kind === 'new') return { x: CAMERA_INSET_X - 86 * state.zoom, y: CAMERA_INSET_Y - 82 * state.zoom }
+  const positions = cards.map(card => card.position).filter(position => position !== undefined)
+  if (positions.length === 0) return { x: 0, y: 0 }
+  const left = Math.min(...positions.map(position => position.x))
+  const top = Math.min(...positions.map(position => position.y))
+  return { x: CAMERA_INSET_X - left * state.zoom, y: 64 - top * state.zoom }
 }
 
 function placeConversationCards(cards) {
@@ -711,6 +711,7 @@ function renderCanvas() {
   if (!state.canvasViewInitialized) {
     state.canvasCamera = initialCanvasCamera(cards)
     state.canvasViewInitialized = true
+    window.requestAnimationFrame(fitCanvasToViewport)
   }
   return `<section class="canvas-view"><div class="canvas-viewport"><div class="canvas-content" style="transform:translate(${state.canvasCamera.x}px, ${state.canvasCamera.y}px) scale(${state.zoom})"><svg class="connectors">${canvasConnectors(cards)}</svg><div class="cards-layer">${cards.map(conversationCard).join('')}${draftCard(cards)}</div></div></div></section>`
 }
@@ -871,19 +872,35 @@ function zoomCanvasAtCenter(delta) {
   zoomCanvas(viewport, state.zoom + delta, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)
 }
 
-function focusActiveCard() {
-  const card = document.querySelector('.thread-card.active') ?? document.querySelector('.thread-card[data-thread]:not(.draft-card)')
+function fitCanvasToViewport() {
   const viewport = document.querySelector('.canvas-viewport')
-  if (!(card instanceof HTMLElement) || !(viewport instanceof HTMLElement)) return
-  const left = Number.parseFloat(card.style.left)
-  const top = Number.parseFloat(card.style.top)
-  if (!Number.isFinite(left) || !Number.isFinite(top)) return
+  const cards = [...document.querySelectorAll('.thread-card[data-card-id]')]
+  if (!(viewport instanceof HTMLElement) || cards.length === 0) return
+  const positions = cards.map(card => ({
+    left: Number.parseFloat(card.style.left),
+    top: Number.parseFloat(card.style.top),
+  })).filter(position => Number.isFinite(position.left) && Number.isFinite(position.top))
+  if (positions.length === 0) return
+  const left = Math.min(...positions.map(position => position.left))
+  const top = Math.min(...positions.map(position => position.top))
+  const right = Math.max(...positions.map(position => position.left + CARD_WIDTH))
+  const bottom = Math.max(...positions.map(position => position.top + CARD_HEIGHT))
   const bounds = viewport.getBoundingClientRect()
+  const availableWidth = Math.max(1, bounds.width - CAMERA_INSET_X * 2)
+  const availableHeight = Math.max(1, bounds.height - 64 - CAMERA_INSET_Y)
+  const fittedZoom = Math.min(state.zoom, 1, availableWidth / (right - left), availableHeight / (bottom - top))
+  state.zoom = Math.max(.6, Math.round(fittedZoom * 100) / 100)
   state.canvasCamera = {
-    x: bounds.width / 2 - (left + CARD_WIDTH / 2) * state.zoom,
-    y: bounds.height / 2 - (top + CARD_HEIGHT / 2) * state.zoom,
+    x: CAMERA_INSET_X - left * state.zoom,
+    y: 64 - top * state.zoom,
   }
   applyCanvasTransform()
+  const label = document.querySelector('.canvas-controls span')
+  if (label !== null) label.textContent = `${Math.round(state.zoom * 100)}%`
+}
+
+function focusActiveCard() {
+  fitCanvasToViewport()
 }
 
 app.addEventListener('pointerdown', event => {
