@@ -36,7 +36,7 @@ window.__ModuleLoader__.load({
         if (!result.ok) throw new Error(result.error?.message ?? 'DSH 未接受这条消息')
       }
       const style = document.createElement('style')
-      style.textContent = '.dsh-synapse-map-tab{margin-left:4px}.dsh-synapse-host{position:fixed;inset:0;width:100vw;height:100vh;visibility:hidden;pointer-events:none;overflow:hidden}.dsh-synapse-map-root,.dsh-synapse-map-scroll{display:flex!important;flex:1 1 0%!important;min-height:0!important;height:100%!important}.dsh-synapse-map-scroll{padding:0!important}.dsh-synapse-map-body{overflow:hidden!important;scrollbar-gutter:auto!important}.dsh-synapse-map-body>:has([data-slot="conversation.composer"]){display:none!important}.dsh-synapse-canvas{display:flex!important;flex:1 1 0%!important;min-height:0!important;height:100%!important;width:100%}.dsh-synapse-canvas-staging{position:fixed!important;inset:auto!important;opacity:0!important;pointer-events:none!important}.dsh-synapse-canvas iframe{display:block;width:100%;height:100%;border:0;flex:1;background:#f5f7fa}'
+      style.textContent = '.dsh-synapse-map-tab{margin-left:4px}.dsh-synapse-host{position:fixed;z-index:70;visibility:hidden;pointer-events:none;overflow:hidden;background:var(--ds-color-bg-base,#101216)}.dsh-synapse-host.dsh-synapse-host-visible{visibility:visible;pointer-events:auto}.dsh-synapse-map-root,.dsh-synapse-map-scroll{display:flex!important;flex:1 1 0%!important;min-height:0!important;height:100%!important}.dsh-synapse-map-scroll{padding:0!important}.dsh-synapse-map-body{overflow:hidden!important;scrollbar-gutter:auto!important}.dsh-synapse-map-body>:has([data-slot="conversation.composer"]){display:none!important}.dsh-synapse-canvas{display:flex!important;width:100%;height:100%}.dsh-synapse-canvas iframe{display:block;width:100%;height:100%;border:0;flex:1;background:transparent}'
       document.head.append(style)
       const host = document.createElement('div')
       host.className = 'dsh-synapse-host'
@@ -47,7 +47,6 @@ window.__ModuleLoader__.load({
       let scroll = null
       let mapRoot = null
       let conversationScroll = null
-      let dialogContents = null
       let mapVisible = false
       let mapOpening = false
       let mapOpenRequest = 0
@@ -82,30 +81,48 @@ window.__ModuleLoader__.load({
         map.setAttribute('aria-selected', String(mapVisible))
         dialog.setAttribute('aria-selected', String(!mapVisible))
       }
-      const clearCanvasStage = () => {
-        canvas.classList.remove('dsh-synapse-canvas-staging')
-        for (const property of ['left', 'top', 'width', 'height']) canvas.style.removeProperty(property)
+      const updateHostBounds = () => {
+        const viewport = conversationScroll ?? scroll
+        if (viewport === null) return false
+        const bounds = viewport.getBoundingClientRect()
+        if (bounds.width <= 0 || bounds.height <= 0) return false
+        host.style.left = `${bounds.left}px`
+        host.style.top = `${bounds.top}px`
+        host.style.width = `${bounds.width}px`
+        host.style.height = `${bounds.height}px`
+        return true
+      }
+      const clearMapLayout = () => {
+        host.classList.remove('dsh-synapse-host-visible')
+        mapRoot?.classList.remove('dsh-synapse-map-root')
+        scroll?.classList.remove('dsh-synapse-map-scroll')
+        conversationScroll?.classList.remove('dsh-synapse-map-body')
+        for (const property of ['left', 'top', 'width', 'height']) host.style.removeProperty(property)
+        scroll = null
+        mapRoot = null
+        conversationScroll = null
+      }
+      const prepareMapLayout = () => {
+        const target = scrollContainer()
+        if (target === null) return false
+        scroll = target
+        mapRoot = scroll.parentElement
+        conversationScroll = scroll.closest('[data-conversation-scroll]')
+        mapRoot?.classList.add('dsh-synapse-map-root')
+        scroll.classList.add('dsh-synapse-map-scroll')
+        conversationScroll?.classList.add('dsh-synapse-map-body')
+        return updateHostBounds()
       }
       const close = (remember = true) => {
         mapOpenRequest += 1
         if (!mapVisible) {
           mapOpening = false
-          clearCanvasStage()
-          if (canvas.parentElement !== host) host.append(canvas)
+          clearMapLayout()
+          syncNativeTabs()
           return
         }
         if (remember && selectedSessionId !== null) sessionViews.set(selectedSessionId, 'dialog')
-        if (scroll !== null && dialogContents !== null) scroll.replaceChildren(...dialogContents)
-        mapRoot?.classList.remove('dsh-synapse-map-root')
-        scroll?.classList.remove('dsh-synapse-map-scroll')
-        conversationScroll?.classList.remove('dsh-synapse-map-body')
-        clearCanvasStage()
-        host.append(canvas)
-        document.body.append(host)
-        scroll = null
-        mapRoot = null
-        conversationScroll = null
-        dialogContents = null
+        clearMapLayout()
         mapVisible = false
         mapOpening = false
         syncNativeTabs()
@@ -174,6 +191,7 @@ window.__ModuleLoader__.load({
       const open = () => {
         if (mapVisible || mapOpening) return
         if (selectedSessionId !== null) sessionViews.set(selectedSessionId, 'map')
+        if (!prepareMapLayout()) return close(false)
         mapOpening = true
         const requestId = ++mapOpenRequest
         const synced = syncSessions()
@@ -196,31 +214,15 @@ window.__ModuleLoader__.load({
         if (event.data.type === 'synapse:close') return close()
         if (event.data.type === 'synapse:map-ready') {
           if (!mapOpening || mapVisible || event.data.requestId !== mapOpenRequest) return
-          const target = scrollContainer()
-          if (target === null) return close(false)
-          scroll = target
-          mapRoot = scroll.parentElement
-          conversationScroll = scroll.closest('[data-conversation-scroll]')
-          dialogContents = [...scroll.childNodes]
-          const bounds = scroll.getBoundingClientRect()
-          canvas.classList.add('dsh-synapse-canvas-staging')
-          canvas.style.setProperty('left', `${bounds.left}px`, 'important')
-          canvas.style.setProperty('top', `${bounds.top}px`, 'important')
-          canvas.style.setProperty('width', `${bounds.width}px`, 'important')
-          canvas.style.setProperty('height', `${bounds.height}px`, 'important')
-          scroll.append(canvas)
           const requestId = mapOpenRequest
-          window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
             if (!mapOpening || requestId !== mapOpenRequest) return
-            mapRoot?.classList.add('dsh-synapse-map-root')
-            scroll.classList.add('dsh-synapse-map-scroll')
-            conversationScroll?.classList.add('dsh-synapse-map-body')
-            scroll.replaceChildren(canvas)
-            clearCanvasStage()
+            if (!updateHostBounds()) return close(false)
+            host.classList.add('dsh-synapse-host-visible')
             mapVisible = true
             mapOpening = false
             syncNativeTabs()
-          }))
+          })
           return
         }
         if (event.data.type === 'synapse:request-current') {
@@ -285,11 +287,13 @@ window.__ModuleLoader__.load({
       frame.addEventListener('load', onFrameLoad)
       window.addEventListener('message', onMessage)
       window.addEventListener('keydown', onKeyDown)
+      window.addEventListener('resize', updateHostBounds)
       ctx.effect(() => () => {
         tabObserver.disconnect()
         frame.removeEventListener('load', onFrameLoad)
         window.removeEventListener('message', onMessage)
         window.removeEventListener('keydown', onKeyDown)
+        window.removeEventListener('resize', updateHostBounds)
         themeObserver?.disconnect()
         unsubscribeSessions()
         unsubscribeWorkspaces()

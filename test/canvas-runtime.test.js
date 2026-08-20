@@ -10,7 +10,7 @@ test('uses one camera transform without browser scroll coordinates', async () =>
   assert.doesNotMatch(source, /canvasScroll|canvasPadding|canvasDomShift|canvasMetrics|viewport\.scrollLeft|viewport\.scrollTop/)
 })
 
-test('embeds the live map iframe in the native dialog scroll container', async () => {
+test('keeps the live map iframe mounted while toggling it over the native scroll body', async () => {
   const source = await readFile(new URL('../client.js', import.meta.url), 'utf8')
 
   assert.doesNotMatch(source, /dsh-synapse-switch/)
@@ -21,10 +21,13 @@ test('embeds the live map iframe in the native dialog scroll container', async (
   assert.match(source, /\[data-slot="conversation\.view"\] div/)
   assert.match(source, /name\.endsWith\(suffix\)/)
   assert.match(source, /src="\/synapse\/\?embed=canvas"/)
-  assert.match(source, /scroll\.replaceChildren\(canvas\)/)
+  assert.equal(source.match(/document\.body\.append\(host\)/g)?.length, 1)
+  assert.match(source, /const viewport = conversationScroll \?\? scroll/)
+  assert.match(source, /host\.classList\.add\('dsh-synapse-host-visible'\)/)
+  assert.match(source, /host\.classList\.remove\('dsh-synapse-host-visible'\)/)
+  assert.doesNotMatch(source, /scroll\.replaceChildren|scroll\.append\(canvas\)|host\.append\(canvas\)|canvas-staging/)
   assert.match(source, /dsh-synapse-map-scroll\{padding:0!important\}/)
   assert.match(source, /scrollbar-gutter:auto!important/)
-  assert.match(source, /scroll\.replaceChildren\(\.\.\.dialogContents\)/)
   assert.match(source, /const sessionViews = new Map\(\)/)
   assert.match(source, /sessionViews\.get\(nextSessionId\) === 'map'/)
   assert.match(source, /window\.requestAnimationFrame\(\(\) =>/)
