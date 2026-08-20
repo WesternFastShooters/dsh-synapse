@@ -86,6 +86,7 @@ window.__ModuleLoader__.load({
       }
       const send = (type, payload) => { frame.contentWindow?.postMessage({ source: 'dsh-synapse', type, ...payload }, location.origin) }
       let syncQueued = false
+      let sessionsSync = Promise.resolve()
       let knownSessionIds = new Set()
       const liveUnsubscribers = new Map()
       const syncLiveSessions = () => {
@@ -107,29 +108,32 @@ window.__ModuleLoader__.load({
         for (const [id, unsubscribe] of liveUnsubscribers) if (!snapshot.ids.includes(id)) { unsubscribe(); liveUnsubscribers.delete(id) }
       }
       const syncSessions = () => {
-        if (syncQueued) return
+        if (syncQueued) return sessionsSync
         syncQueued = true
-        queueMicrotask(() => {
-          syncQueued = false
+        sessionsSync = new Promise(resolve => queueMicrotask(() => {
           const sessions = sessionSnapshot(ctx)
           const sessionIds = new Set(sessions.map(session => session.id))
           const removedSessionIds = [...knownSessionIds].filter(id => !sessionIds.has(id))
           knownSessionIds = sessionIds
-          void fetch('/synapse/api/sessions/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessions, removedSessionIds }) }).catch(() => {})
-        })
+          fetch('/synapse/api/sessions/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessions, removedSessionIds }) })
+            .catch(() => {})
+            .finally(() => { syncQueued = false; resolve() })
+        }))
+        return sessionsSync
       }
       const syncTheme = () => {
         const dark = document.body?.hasAttribute?.('data-ds-dark-theme') === true
         send('synapse:theme', { dark })
       }
       const syncCurrentSession = () => {
-        syncSessions()
+        const synced = syncSessions()
         syncLiveSessions()
         syncTheme()
-        if (mapVisible) {
+        if (mapVisible) void synced.finally(() => {
+          if (!mapVisible) return
           send('synapse:workspaces', { workspaces: workspaceSnapshot(ctx) })
           send('synapse:current-session', { session: currentSession(ctx) })
-        }
+        })
       }
       const open = () => {
         if (mapVisible) return
@@ -154,8 +158,10 @@ window.__ModuleLoader__.load({
         if (event.data.type === 'synapse:close') return close()
         if (event.data.type === 'synapse:map-ready') return
         if (event.data.type === 'synapse:request-current') {
-          send('synapse:workspaces', { workspaces: workspaceSnapshot(ctx) })
-          return send('synapse:current-session', { session: currentSession(ctx) })
+          return void syncSessions().finally(() => {
+            send('synapse:workspaces', { workspaces: workspaceSnapshot(ctx) })
+            send('synapse:current-session', { session: currentSession(ctx) })
+          })
         }
         if (event.data.type === 'synapse:open-session') {
           try { ctx.sessions.open(event.data.sessionId); close() } catch { send('synapse:bridge-error', { message: '关联的 DSH 会话已不可用' }) }
