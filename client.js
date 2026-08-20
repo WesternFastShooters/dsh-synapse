@@ -40,13 +40,14 @@ window.__ModuleLoader__.load({
       document.head.append(style)
       const host = document.createElement('div')
       host.className = 'dsh-synapse-host'
-      host.innerHTML = '<section class="canvas-view dsh-synapse-canvas"><iframe title="会话地图" src="/synapse/"></iframe></section>'
+      host.innerHTML = '<section class="canvas-view dsh-synapse-canvas"><iframe title="会话地图" src="/synapse/?embed=canvas"></iframe></section>'
       document.body.append(host)
       const canvas = host.querySelector('.dsh-synapse-canvas')
       const frame = host.querySelector('iframe')
       let scroll = null
       let dialogContents = null
       let mapVisible = false
+      let nativeActiveClasses = []
       const dialogTab = () => [...document.querySelectorAll('button[role="tab"]')].find(button => button.textContent.trim() === '对话') ?? null
       const scrollContainer = () => [...document.querySelectorAll('div.Md3f7G_scroll')].find(element => element.getClientRects().length > 0) ?? null
       const syncNativeTabs = () => {
@@ -57,7 +58,7 @@ window.__ModuleLoader__.load({
           map = document.createElement('button')
           map.type = 'button'
           map.role = 'tab'
-          map.className = dialog.className
+          map.className = [...dialog.classList].filter(name => !name.toLowerCase().includes('active')).join(' ')
           map.classList.add('dsh-synapse-map-tab')
           map.dataset.dshSynapseMapTab = ''
           map.textContent = '地图'
@@ -65,8 +66,12 @@ window.__ModuleLoader__.load({
           map.addEventListener('click', open)
           dialog.addEventListener('click', close)
         }
-        map.className = dialog.className
-        map.classList.add('dsh-synapse-map-tab')
+        const activeClasses = [...new Set([...nativeActiveClasses, ...dialog.classList].filter(name => name.toLowerCase().includes('active')))]
+        nativeActiveClasses = activeClasses
+        for (const name of activeClasses) {
+          dialog.classList.toggle(name, !mapVisible)
+          map.classList.toggle(name, mapVisible)
+        }
         map.setAttribute('aria-selected', String(mapVisible))
         dialog.setAttribute('aria-selected', String(!mapVisible))
       }

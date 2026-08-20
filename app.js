@@ -1,4 +1,6 @@
 const app = document.querySelector('#app')
+const embeddedCanvas = new URLSearchParams(location.search).get('embed') === 'canvas'
+if (embeddedCanvas) document.body.classList.add('synapse-embed')
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
 const LEGACY_CARD_POSITIONS_KEY = 'dsh-synapse:card-positions'
 const CARD_POSITIONS_KEY = 'dsh-synapse:card-positions:v3'
@@ -776,6 +778,11 @@ function render() {
   const workspace = state.workspace
   const threads = workspace?.threads ?? []
   const view = state.mode === 'thread' ? renderThread() : renderCanvas()
+  if (embeddedCanvas) {
+    app.innerHTML = renderCanvas()
+    installDragging()
+    return
+  }
   const choices = workspaceChoices()
   const selectedWorkspaceId = state.selectedDshWorkspaceId ?? workspace?.id
   const canvasControls = state.mode === 'canvas' && (threads.length > 0 || state.draft?.kind === 'new') ? `<div class="canvas-controls"><button data-action="layout">整理节点</button><button data-action="focus-active" title="定位到当前会话">定位</button><button data-action="zoom-out" aria-label="缩小">-</button><span>${Math.round(state.zoom * 100)}%</span><button data-action="zoom-in" aria-label="放大">+</button></div>` : ''
