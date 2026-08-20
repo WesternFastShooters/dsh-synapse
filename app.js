@@ -948,7 +948,8 @@ app.addEventListener('wheel', event => {
   event.preventDefault()
   if (event.ctrlKey) {
     // Chromium reports a macOS pinch gesture as Ctrl + wheel.
-    zoomCanvas(viewport, state.zoom + (event.deltaY < 0 ? .05 : -.05), event.clientX, event.clientY)
+    const pinchStep = Math.max(.1, Math.min(.35, Math.abs(event.deltaY) * .01))
+    zoomCanvas(viewport, state.zoom + (event.deltaY < 0 ? pinchStep : -pinchStep), event.clientX, event.clientY)
     return
   }
   // A macOS two-finger trackpad gesture is delivered as a wheel event.
