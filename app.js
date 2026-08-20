@@ -934,6 +934,14 @@ app.addEventListener('pointerdown', event => {
 app.addEventListener('wheel', event => {
   const viewport = canvasViewport(event.target)
   if (!(viewport instanceof HTMLElement)) return
+  if (event.ctrlKey) {
+    // Chromium reports a macOS pinch gesture as Ctrl + wheel. Handle it before
+    // card scrolling so pinching inside a card cannot trigger browser zoom.
+    event.preventDefault()
+    const pinchStep = Math.max(.1, Math.min(.35, Math.abs(event.deltaY) * .01))
+    zoomCanvas(viewport, state.zoom + (event.deltaY < 0 ? pinchStep : -pinchStep), event.clientX, event.clientY)
+    return
+  }
   const card = event.target instanceof Element ? event.target.closest('.thread-card') : null
   if (card instanceof HTMLElement) {
     // Over a card the wheel scrolls that card's own answer with the browser's
@@ -946,12 +954,6 @@ app.addEventListener('wheel', event => {
     }
   }
   event.preventDefault()
-  if (event.ctrlKey) {
-    // Chromium reports a macOS pinch gesture as Ctrl + wheel.
-    const pinchStep = Math.max(.1, Math.min(.35, Math.abs(event.deltaY) * .01))
-    zoomCanvas(viewport, state.zoom + (event.deltaY < 0 ? pinchStep : -pinchStep), event.clientX, event.clientY)
-    return
-  }
   // A macOS two-finger trackpad gesture is delivered as a wheel event.
   // Move the camera directly so no third-finger drag gesture is required.
   state.canvasCamera = {
