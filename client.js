@@ -50,6 +50,8 @@ window.__ModuleLoader__.load({
       let dialogContents = null
       let mapVisible = false
       let nativeActiveClasses = []
+      const sessionViews = new Map()
+      let selectedSessionId = currentSession(ctx)?.id ?? null
       const dialogTab = () => [...document.querySelectorAll('button[role="tab"]')].find(button => button.textContent.trim() === '对话') ?? null
       const hasClassSuffix = (element, suffix) => element instanceof HTMLElement && [...element.classList].some(name => name.endsWith(suffix))
       const scrollContainer = () => [...document.querySelectorAll('[data-slot="conversation.view"] div')].find(element => hasClassSuffix(element, '_scroll') && element.getClientRects().length > 0) ?? null
@@ -78,8 +80,9 @@ window.__ModuleLoader__.load({
         map.setAttribute('aria-selected', String(mapVisible))
         dialog.setAttribute('aria-selected', String(!mapVisible))
       }
-      const close = () => {
+      const close = (remember = true) => {
         if (!mapVisible) return
+        if (remember && selectedSessionId !== null) sessionViews.set(selectedSessionId, 'dialog')
         if (scroll !== null && dialogContents !== null) scroll.replaceChildren(...dialogContents)
         mapRoot?.classList.remove('dsh-synapse-map-root')
         scroll?.classList.remove('dsh-synapse-map-scroll')
@@ -134,6 +137,12 @@ window.__ModuleLoader__.load({
         send('synapse:theme', { dark })
       }
       const syncCurrentSession = () => {
+        const nextSessionId = currentSession(ctx)?.id ?? null
+        if (nextSessionId !== selectedSessionId) {
+          selectedSessionId = nextSessionId
+          if (sessionViews.get(nextSessionId) === 'map') open()
+          else close(false)
+        }
         const synced = syncSessions()
         syncLiveSessions()
         syncTheme()
@@ -145,6 +154,7 @@ window.__ModuleLoader__.load({
       }
       const open = () => {
         if (mapVisible) return
+        if (selectedSessionId !== null) sessionViews.set(selectedSessionId, 'map')
         const target = scrollContainer()
         if (target === null) return
         scroll = target

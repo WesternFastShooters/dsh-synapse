@@ -23,6 +23,8 @@ test('embeds the live map iframe in the native dialog scroll container', async (
   assert.match(source, /src="\/synapse\/\?embed=canvas"/)
   assert.match(source, /scroll\.replaceChildren\(canvas\)/)
   assert.match(source, /scroll\.replaceChildren\(\.\.\.dialogContents\)/)
+  assert.match(source, /const sessionViews = new Map\(\)/)
+  assert.match(source, /sessionViews\.get\(nextSessionId\) === 'map'/)
 })
 
 test('recenters the canvas whenever the map view is reopened', async () => {
