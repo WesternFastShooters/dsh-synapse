@@ -851,7 +851,7 @@ function canvasViewport(target) {
 }
 
 function zoomCanvas(viewport, nextZoom, clientX, clientY) {
-  const zoom = Math.min(4, Math.max(.6, Math.round(nextZoom * 100) / 100))
+  const zoom = Math.min(4, Math.max(.6, nextZoom))
   if (zoom === state.zoom) return
   const bounds = viewport.getBoundingClientRect()
   const localX = clientX - bounds.left
@@ -903,6 +903,32 @@ function focusActiveCard() {
   fitCanvasToViewport()
 }
 
+let pendingPinchZoomDelta = 0
+let pendingPinchAnchor = null
+let pendingPinchFrame = null
+
+function normalizedPinchDelta(event) {
+  const factor = event.ctrlKey ? 10 : 1
+  return -event.deltaY * (event.deltaMode === 1 ? .05 : event.deltaMode ? 1 : .002) * factor
+}
+
+function schedulePinchZoom(viewport, event) {
+  const delta = normalizedPinchDelta(event)
+  if (!Number.isFinite(delta) || Math.abs(delta) < Number.EPSILON) return
+  pendingPinchZoomDelta += delta
+  pendingPinchAnchor = { x: event.clientX, y: event.clientY }
+  if (pendingPinchFrame !== null) return
+  pendingPinchFrame = window.requestAnimationFrame(() => {
+    pendingPinchFrame = null
+    const anchor = pendingPinchAnchor
+    const totalDelta = pendingPinchZoomDelta
+    pendingPinchAnchor = null
+    pendingPinchZoomDelta = 0
+    if (anchor === null) return
+    zoomCanvas(viewport, state.zoom * 2 ** totalDelta, anchor.x, anchor.y)
+  })
+}
+
 app.addEventListener('pointerdown', event => {
   const viewport = canvasViewport(event.target)
   if (!(viewport instanceof HTMLElement) || event.target instanceof Element && event.target.closest('.thread-card, button, textarea, select')) return
@@ -934,12 +960,11 @@ app.addEventListener('pointerdown', event => {
 app.addEventListener('wheel', event => {
   const viewport = canvasViewport(event.target)
   if (!(viewport instanceof HTMLElement)) return
-  if (event.ctrlKey) {
+  if (event.ctrlKey || event.metaKey) {
     // Chromium reports a macOS pinch gesture as Ctrl + wheel. Handle it before
     // card scrolling so pinching inside a card cannot trigger browser zoom.
     event.preventDefault()
-    const pinchStep = Math.max(.1, Math.min(.35, Math.abs(event.deltaY) * .01))
-    zoomCanvas(viewport, state.zoom + (event.deltaY < 0 ? pinchStep : -pinchStep), event.clientX, event.clientY)
+    schedulePinchZoom(viewport, event)
     return
   }
   const card = event.target instanceof Element ? event.target.closest('.thread-card') : null
