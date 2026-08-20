@@ -10,16 +10,16 @@ test('uses one camera transform without browser scroll coordinates', async () =>
   assert.doesNotMatch(source, /canvasScroll|canvasPadding|canvasDomShift|canvasMetrics|viewport\.scrollLeft|viewport\.scrollTop/)
 })
 
-test('reuses the live map iframe and retries initialization only after iframe load', async () => {
+test('embeds the live map iframe in the native dialog scroll container', async () => {
   const source = await readFile(new URL('../client.js', import.meta.url), 'utf8')
-  const openFlow = source.slice(source.indexOf('let mapOpenFallback'), source.indexOf('const onMessage'))
-  const open = openFlow.slice(openFlow.indexOf('const open ='), openFlow.indexOf('const onFrameLoad'))
 
-  assert.doesNotMatch(openFlow, /frame\.src\s*=/)
-  assert.match(openFlow, /const onFrameLoad/)
-  assert.match(openFlow, /if \(mapOpening\) send\('synapse:map-opened'\)/)
-  assert.ok(open.indexOf('overlay.hidden = false') < open.indexOf("send('synapse:map-opened')"))
-  assert.match(open, /overlay\.classList\.add\('is-opening'\)/)
+  assert.doesNotMatch(source, /dsh-synapse-switch/)
+  assert.doesNotMatch(source, /frame\.src\s*=/)
+  assert.match(source, /button\[role="tab"\]/)
+  assert.match(source, /map\.textContent = '地图'/)
+  assert.match(source, /div\.Md3f7G_scroll/)
+  assert.match(source, /scroll\.replaceChildren\(canvas\)/)
+  assert.match(source, /scroll\.replaceChildren\(\.\.\.dialogContents\)/)
 })
 
 test('recenters the canvas whenever the map view is reopened', async () => {

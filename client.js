@@ -36,30 +36,48 @@ window.__ModuleLoader__.load({
         if (!result.ok) throw new Error(result.error?.message ?? 'DSH 未接受这条消息')
       }
       const style = document.createElement('style')
-      style.textContent = '.dsh-synapse-switch{position:fixed;z-index:80;top:12px;left:50%;display:flex;gap:2px;transform:translateX(-50%);border:1px solid #d1d5db;border-radius:999px;background:rgba(255,255,255,.96);padding:3px;backdrop-filter:blur(10px)}.dsh-synapse-switch button{height:28px;border:0;border-radius:999px;background:transparent;padding:0 11px;color:#6b7280;font:600 12px Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}.dsh-synapse-switch button:hover{background:#f3f4f6;color:#111827}.dsh-synapse-switch button.active{background:#111827;color:#fff}.dsh-synapse-switch button:focus-visible{outline:2px solid #111827;outline-offset:2px}.dsh-synapse-overlay{position:fixed;z-index:100;inset:0;background:#f5f7fa}.dsh-synapse-overlay.is-opening{visibility:hidden}.dsh-synapse-overlay[hidden]{display:none}.dsh-synapse-overlay iframe{display:block;width:100%;height:100%;border:0}'
+      style.textContent = '.dsh-synapse-map-tab{margin-left:4px}.dsh-synapse-canvas{display:flex!important;flex:1 1 auto;min-height:0;height:100%;width:100%}.dsh-synapse-canvas iframe{display:block;width:100%;height:100%;border:0;flex:1;background:#f5f7fa}'
       document.head.append(style)
       const host = document.createElement('div')
       host.className = 'dsh-synapse-host'
-      host.innerHTML = '<div class="dsh-synapse-switch" role="group" aria-label="视图切换"><button type="button" data-view="dialog" class="active" aria-pressed="true">对话</button><button type="button" data-view="map" aria-pressed="false">会话地图</button></div><section class="dsh-synapse-overlay" hidden><iframe title="会话地图" src="/synapse/"></iframe></section>'
+      host.innerHTML = '<section class="canvas-view dsh-synapse-canvas"><iframe title="会话地图" src="/synapse/"></iframe></section>'
       document.body.append(host)
-      const dialogButton = host.querySelector('[data-view="dialog"]')
-      const mapButton = host.querySelector('[data-view="map"]')
-      const overlay = host.querySelector('.dsh-synapse-overlay')
+      const canvas = host.querySelector('.dsh-synapse-canvas')
       const frame = host.querySelector('iframe')
-
-      const setView = view => {
-        const showingMap = view === 'map'
-        dialogButton.classList.toggle('active', !showingMap)
-        dialogButton.setAttribute('aria-pressed', String(!showingMap))
-        mapButton.classList.toggle('active', showingMap)
-        mapButton.setAttribute('aria-pressed', String(showingMap))
+      let scroll = null
+      let dialogContents = null
+      let mapVisible = false
+      const dialogTab = () => [...document.querySelectorAll('button[role="tab"]')].find(button => button.textContent.trim() === '对话') ?? null
+      const scrollContainer = () => [...document.querySelectorAll('div.Md3f7G_scroll')].find(element => element.getClientRects().length > 0) ?? null
+      const syncNativeTabs = () => {
+        const dialog = dialogTab()
+        if (dialog === null) return
+        let map = document.querySelector('[data-dsh-synapse-map-tab]')
+        if (map === null) {
+          map = document.createElement('button')
+          map.type = 'button'
+          map.role = 'tab'
+          map.className = dialog.className
+          map.classList.add('dsh-synapse-map-tab')
+          map.dataset.dshSynapseMapTab = ''
+          map.textContent = '地图'
+          dialog.insertAdjacentElement('afterend', map)
+          map.addEventListener('click', open)
+          dialog.addEventListener('click', close)
+        }
+        map.className = dialog.className
+        map.classList.add('dsh-synapse-map-tab')
+        map.setAttribute('aria-selected', String(mapVisible))
+        dialog.setAttribute('aria-selected', String(!mapVisible))
       }
       const close = () => {
-        window.clearTimeout(mapOpenFallback)
-        mapOpening = false
-        overlay.classList.remove('is-opening')
-        overlay.hidden = true
-        setView('dialog')
+        if (!mapVisible) return
+        if (scroll !== null && dialogContents !== null) scroll.replaceChildren(...dialogContents)
+        document.body.append(host)
+        scroll = null
+        dialogContents = null
+        mapVisible = false
+        syncNativeTabs()
       }
       const send = (type, payload) => { frame.contentWindow?.postMessage({ source: 'dsh-synapse', type, ...payload }, location.origin) }
       let syncQueued = false
@@ -73,7 +91,7 @@ window.__ModuleLoader__.load({
           const session = scope === undefined ? undefined : ctx.sessions.sessionOf(scope)
           if (session === undefined) continue
           const publish = () => {
-            if (overlay.hidden) return
+            if (!mapVisible) return
             const state = session.getSnapshot()
             const text = state.partial?.blocks.filter(block => block.kind === 'text').map(block => block.text).join('\n') ?? ''
             send('synapse:live-reply', { sessionId: id, running: state.running, text })
@@ -103,42 +121,33 @@ window.__ModuleLoader__.load({
         syncSessions()
         syncLiveSessions()
         syncTheme()
-        if (!overlay.hidden) {
+        if (mapVisible) {
           send('synapse:workspaces', { workspaces: workspaceSnapshot(ctx) })
           send('synapse:current-session', { session: currentSession(ctx) })
         }
       }
-      let mapOpenFallback = 0
-      let mapOpening = false
-      const showMapOverlay = () => {
-        window.clearTimeout(mapOpenFallback)
-        mapOpening = false
-        overlay.hidden = false
-        overlay.classList.remove('is-opening')
-        syncCurrentSession()
-      }
       const open = () => {
-        window.clearTimeout(mapOpenFallback)
-        mapOpening = true
-        setView('map')
-        // Keep the iframe laid out while hidden so its canvas can receive a
-        // real scroll offset. display:none would clamp scrollTop back to zero.
-        overlay.hidden = false
-        overlay.classList.add('is-opening')
+        if (mapVisible) return
+        const target = scrollContainer()
+        if (target === null) return
+        scroll = target
+        dialogContents = [...scroll.childNodes]
+        scroll.replaceChildren(canvas)
+        mapVisible = true
+        syncNativeTabs()
         window.requestAnimationFrame(() => {
           send('synapse:map-opened')
           syncCurrentSession()
         })
-        mapOpenFallback = window.setTimeout(showMapOverlay, 300)
       }
       const onFrameLoad = () => {
         syncCurrentSession()
-        if (mapOpening) send('synapse:map-opened')
+        if (mapVisible) send('synapse:map-opened')
       }
       const onMessage = event => {
         if (event.origin !== location.origin || event.data?.source !== 'dsh-synapse') return
         if (event.data.type === 'synapse:close') return close()
-        if (event.data.type === 'synapse:map-ready') return showMapOverlay()
+        if (event.data.type === 'synapse:map-ready') return
         if (event.data.type === 'synapse:request-current') {
           send('synapse:workspaces', { workspaces: workspaceSnapshot(ctx) })
           return send('synapse:current-session', { session: currentSession(ctx) })
@@ -182,7 +191,7 @@ window.__ModuleLoader__.load({
           }).catch(() => { send('synapse:bridge-error', { requestId: event.data.requestId, message: 'DSH 会话创建失败，请先在 DSH 选择工作目录' }) })
         }
       }
-      const onKeyDown = event => { if (event.key === 'Escape' && !overlay.hidden) close() }
+      const onKeyDown = event => { if (event.key === 'Escape' && mapVisible) close() }
       // Follow DSH's live theme switch: body[data-ds-dark-theme] is the web
       // client's dark-mode signal, mirrored into the map iframe via synapse:theme.
       const themeObserver = typeof MutationObserver === 'undefined'
@@ -191,16 +200,16 @@ window.__ModuleLoader__.load({
       if (themeObserver !== null && document.body) {
         themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme'] })
       }
+      const tabObserver = new MutationObserver(syncNativeTabs)
+      tabObserver.observe(document.body, { childList: true, subtree: true })
+      syncNativeTabs()
       const unsubscribeSessions = ctx.sessions.list.subscribe(syncCurrentSession)
       const unsubscribeWorkspaces = ctx.workspaces.list.subscribe(syncCurrentSession)
-      dialogButton.addEventListener('click', close)
-      mapButton.addEventListener('click', open)
       frame.addEventListener('load', onFrameLoad)
       window.addEventListener('message', onMessage)
       window.addEventListener('keydown', onKeyDown)
       ctx.effect(() => () => {
-        dialogButton.removeEventListener('click', close)
-        mapButton.removeEventListener('click', open)
+        tabObserver.disconnect()
         frame.removeEventListener('load', onFrameLoad)
         window.removeEventListener('message', onMessage)
         window.removeEventListener('keydown', onKeyDown)
