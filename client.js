@@ -140,8 +140,12 @@ window.__ModuleLoader__.load({
         const nextSessionId = currentSession(ctx)?.id ?? null
         if (nextSessionId !== selectedSessionId) {
           selectedSessionId = nextSessionId
-          if (sessionViews.get(nextSessionId) === 'map') open()
-          else close(false)
+          if (sessionViews.get(nextSessionId) === 'map') {
+            close(false)
+            window.requestAnimationFrame(() => {
+              if (selectedSessionId === nextSessionId && sessionViews.get(nextSessionId) === 'map') open()
+            })
+          } else close(false)
         }
         const synced = syncSessions()
         syncLiveSessions()
