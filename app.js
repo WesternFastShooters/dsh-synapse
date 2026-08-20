@@ -944,13 +944,21 @@ app.addEventListener('wheel', event => {
       deferCanvasRefresh()
       return
     }
-    // A card with no scrollable answer swallows the wheel instead of zooming.
-    event.preventDefault()
-    deferCanvasRefresh()
-    return
   }
   event.preventDefault()
-  zoomCanvas(viewport, state.zoom + (event.deltaY < 0 ? .05 : -.05), event.clientX, event.clientY)
+  if (event.ctrlKey) {
+    // Chromium reports a macOS pinch gesture as Ctrl + wheel.
+    zoomCanvas(viewport, state.zoom + (event.deltaY < 0 ? .05 : -.05), event.clientX, event.clientY)
+    return
+  }
+  // A macOS two-finger trackpad gesture is delivered as a wheel event.
+  // Move the camera directly so no third-finger drag gesture is required.
+  state.canvasCamera = {
+    x: state.canvasCamera.x - event.deltaX,
+    y: state.canvasCamera.y - event.deltaY,
+  }
+  applyCanvasTransform()
+  deferCanvasRefresh()
 }, { passive: false })
 
 // Track pointer-down so the card click handler can tell a plain click from a
