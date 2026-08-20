@@ -1099,7 +1099,7 @@ window.addEventListener('message', event => {
       const workspace = currentDshWorkspace()
       if (workspace !== undefined) await openDshWorkspace(workspace.id, { renderAfter: false })
       if (canReplaceView()) render()
-      window.requestAnimationFrame(() => post('synapse:map-ready'))
+      window.requestAnimationFrame(() => post('synapse:map-ready', { requestId: data.requestId }))
     })().catch(setError)
   }
   if (data.type === 'synapse:theme') {
