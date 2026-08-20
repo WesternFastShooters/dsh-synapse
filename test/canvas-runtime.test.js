@@ -38,6 +38,13 @@ test('recenters the canvas whenever the map view is reopened', async () => {
   assert.match(mapOpened, /state\.mode = 'canvas'\s+render\(\)/)
 })
 
+test('renders canvas controls inside the embedded map', async () => {
+  const source = await readFile(new URL('../app.js', import.meta.url), 'utf8')
+  const embedded = source.slice(source.indexOf('if (embeddedCanvas)'), source.indexOf('const choices = workspaceChoices()'))
+
+  assert.match(embedded, /app\.innerHTML = `\$\{canvasControls\}\$\{renderCanvas\(\)\}`/)
+})
+
 test('lets the card answer scroll with the native wheel instead of adding deltaY', async () => {
   const source = await readFile(new URL('../app.js', import.meta.url), 'utf8')
   const wheel = source.slice(source.indexOf("app.addEventListener('wheel'"), source.indexOf("app.addEventListener('click'"))
