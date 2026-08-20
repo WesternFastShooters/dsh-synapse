@@ -22,6 +22,7 @@ test('embeds the live map iframe in the native dialog scroll container', async (
   assert.match(source, /name\.endsWith\(suffix\)/)
   assert.match(source, /src="\/synapse\/\?embed=canvas"/)
   assert.match(source, /scroll\.replaceChildren\(canvas\)/)
+  assert.match(source, /dsh-synapse-map-scroll\{padding:0!important\}/)
   assert.match(source, /scroll\.replaceChildren\(\.\.\.dialogContents\)/)
   assert.match(source, /const sessionViews = new Map\(\)/)
   assert.match(source, /sessionViews\.get\(nextSessionId\) === 'map'/)

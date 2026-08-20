@@ -36,7 +36,7 @@ window.__ModuleLoader__.load({
         if (!result.ok) throw new Error(result.error?.message ?? 'DSH 未接受这条消息')
       }
       const style = document.createElement('style')
-      style.textContent = '.dsh-synapse-map-tab{margin-left:4px}.dsh-synapse-map-root,.dsh-synapse-map-scroll{display:flex!important;flex:1 1 0%!important;min-height:0!important;height:100%!important}.dsh-synapse-map-body{overflow:hidden!important}.dsh-synapse-map-body>:has([data-slot="conversation.composer"]){display:none!important}.dsh-synapse-canvas{display:flex!important;flex:1 1 0%!important;min-height:0!important;height:100%!important;width:100%}.dsh-synapse-canvas iframe{display:block;width:100%;height:100%;border:0;flex:1;background:#f5f7fa}'
+      style.textContent = '.dsh-synapse-map-tab{margin-left:4px}.dsh-synapse-map-root,.dsh-synapse-map-scroll{display:flex!important;flex:1 1 0%!important;min-height:0!important;height:100%!important}.dsh-synapse-map-scroll{padding:0!important}.dsh-synapse-map-body{overflow:hidden!important}.dsh-synapse-map-body>:has([data-slot="conversation.composer"]){display:none!important}.dsh-synapse-canvas{display:flex!important;flex:1 1 0%!important;min-height:0!important;height:100%!important;width:100%}.dsh-synapse-canvas iframe{display:block;width:100%;height:100%;border:0;flex:1;background:#f5f7fa}'
       document.head.append(style)
       const host = document.createElement('div')
       host.className = 'dsh-synapse-host'
