@@ -1092,10 +1092,15 @@ window.addEventListener('message', event => {
   if (event.origin !== window.location.origin || event.data?.source !== 'dsh-synapse') return
   const data = event.data
   if (data.type === 'synapse:map-opened') {
-    resetCanvasCamera()
-    state.mode = 'canvas'
-    render()
-    window.requestAnimationFrame(() => post('synapse:map-ready'))
+    void (async () => {
+      state.mode = 'canvas'
+      render()
+      resetCanvasCamera()
+      const workspace = currentDshWorkspace()
+      if (workspace !== undefined) await openDshWorkspace(workspace.id, { renderAfter: false })
+      if (canReplaceView()) render()
+      window.requestAnimationFrame(() => post('synapse:map-ready'))
+    })().catch(setError)
   }
   if (data.type === 'synapse:theme') {
     document.documentElement.dataset.theme = data.dark === true ? 'dark' : 'light'

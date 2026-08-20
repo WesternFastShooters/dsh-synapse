@@ -36,7 +36,7 @@ window.__ModuleLoader__.load({
         if (!result.ok) throw new Error(result.error?.message ?? 'DSH 未接受这条消息')
       }
       const style = document.createElement('style')
-      style.textContent = '.dsh-synapse-map-tab{margin-left:4px}.dsh-synapse-map-root,.dsh-synapse-map-scroll{display:flex!important;flex:1 1 0%!important;min-height:0!important;height:100%!important}.dsh-synapse-map-scroll{padding:0!important}.dsh-synapse-map-body{overflow:hidden!important;scrollbar-gutter:auto!important}.dsh-synapse-map-body>:has([data-slot="conversation.composer"]){display:none!important}.dsh-synapse-canvas{display:flex!important;flex:1 1 0%!important;min-height:0!important;height:100%!important;width:100%}.dsh-synapse-canvas iframe{display:block;width:100%;height:100%;border:0;flex:1;background:#f5f7fa}'
+      style.textContent = '.dsh-synapse-map-tab{margin-left:4px}.dsh-synapse-host{position:fixed;inset:0;width:100vw;height:100vh;visibility:hidden;pointer-events:none;overflow:hidden}.dsh-synapse-map-root,.dsh-synapse-map-scroll{display:flex!important;flex:1 1 0%!important;min-height:0!important;height:100%!important}.dsh-synapse-map-scroll{padding:0!important}.dsh-synapse-map-body{overflow:hidden!important;scrollbar-gutter:auto!important}.dsh-synapse-map-body>:has([data-slot="conversation.composer"]){display:none!important}.dsh-synapse-canvas{display:flex!important;flex:1 1 0%!important;min-height:0!important;height:100%!important;width:100%}.dsh-synapse-canvas iframe{display:block;width:100%;height:100%;border:0;flex:1;background:#f5f7fa}'
       document.head.append(style)
       const host = document.createElement('div')
       host.className = 'dsh-synapse-host'
@@ -49,6 +49,7 @@ window.__ModuleLoader__.load({
       let conversationScroll = null
       let dialogContents = null
       let mapVisible = false
+      let mapOpening = false
       let nativeActiveClasses = []
       const sessionViews = new Map()
       let selectedSessionId = currentSession(ctx)?.id ?? null
@@ -81,7 +82,10 @@ window.__ModuleLoader__.load({
         dialog.setAttribute('aria-selected', String(!mapVisible))
       }
       const close = (remember = true) => {
-        if (!mapVisible) return
+        if (!mapVisible) {
+          mapOpening = false
+          return
+        }
         if (remember && selectedSessionId !== null) sessionViews.set(selectedSessionId, 'dialog')
         if (scroll !== null && dialogContents !== null) scroll.replaceChildren(...dialogContents)
         mapRoot?.classList.remove('dsh-synapse-map-root')
@@ -93,6 +97,7 @@ window.__ModuleLoader__.load({
         conversationScroll = null
         dialogContents = null
         mapVisible = false
+        mapOpening = false
         syncNativeTabs()
       }
       const send = (type, payload) => { frame.contentWindow?.postMessage({ source: 'dsh-synapse', type, ...payload }, location.origin) }
@@ -157,23 +162,18 @@ window.__ModuleLoader__.load({
         })
       }
       const open = () => {
-        if (mapVisible) return
+        if (mapVisible || mapOpening) return
         if (selectedSessionId !== null) sessionViews.set(selectedSessionId, 'map')
-        const target = scrollContainer()
-        if (target === null) return
-        scroll = target
-        mapRoot = scroll.parentElement
-        conversationScroll = scroll.closest('[data-conversation-scroll]')
-        mapRoot?.classList.add('dsh-synapse-map-root')
-        scroll.classList.add('dsh-synapse-map-scroll')
-        conversationScroll?.classList.add('dsh-synapse-map-body')
-        dialogContents = [...scroll.childNodes]
-        scroll.replaceChildren(canvas)
-        mapVisible = true
-        syncNativeTabs()
-        window.requestAnimationFrame(() => {
-          send('synapse:map-opened')
-          syncCurrentSession()
+        mapOpening = true
+        const synced = syncSessions()
+        syncTheme()
+        void synced.finally(() => {
+          if (!mapOpening) return
+          send('synapse:workspaces', { workspaces: workspaceSnapshot(ctx) })
+          send('synapse:current-session', { session: currentSession(ctx) })
+          window.requestAnimationFrame(() => {
+            if (mapOpening) send('synapse:map-opened')
+          })
         })
       }
       const onFrameLoad = () => {
@@ -183,7 +183,23 @@ window.__ModuleLoader__.load({
       const onMessage = event => {
         if (event.origin !== location.origin || event.data?.source !== 'dsh-synapse') return
         if (event.data.type === 'synapse:close') return close()
-        if (event.data.type === 'synapse:map-ready') return
+        if (event.data.type === 'synapse:map-ready') {
+          if (!mapOpening || mapVisible) return
+          const target = scrollContainer()
+          if (target === null) return close(false)
+          scroll = target
+          mapRoot = scroll.parentElement
+          conversationScroll = scroll.closest('[data-conversation-scroll]')
+          mapRoot?.classList.add('dsh-synapse-map-root')
+          scroll.classList.add('dsh-synapse-map-scroll')
+          conversationScroll?.classList.add('dsh-synapse-map-body')
+          dialogContents = [...scroll.childNodes]
+          scroll.replaceChildren(canvas)
+          mapVisible = true
+          mapOpening = false
+          syncNativeTabs()
+          return
+        }
         if (event.data.type === 'synapse:request-current') {
           return void syncSessions().finally(() => {
             send('synapse:workspaces', { workspaces: workspaceSnapshot(ctx) })
