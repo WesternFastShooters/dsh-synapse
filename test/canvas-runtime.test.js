@@ -10,7 +10,7 @@ test('uses one camera transform without browser scroll coordinates', async () =>
   assert.doesNotMatch(source, /canvasScroll|canvasPadding|canvasDomShift|canvasMetrics|viewport\.scrollLeft|viewport\.scrollTop/)
 })
 
-test('keeps the live map iframe mounted while toggling it over the native scroll body', async () => {
+test('BUG:panel-overlap renders the selected map inside the native conversation layout', async () => {
   const source = await readFile(new URL('../client.js', import.meta.url), 'utf8')
 
   assert.doesNotMatch(source, /dsh-synapse-switch/)
@@ -21,8 +21,15 @@ test('keeps the live map iframe mounted while toggling it over the native scroll
   assert.match(source, /\[data-slot="conversation\.view"\] div/)
   assert.match(source, /name\.endsWith\(suffix\)/)
   assert.match(source, /src="\/synapse\/\?embed=canvas"/)
-  assert.equal(source.match(/document\.body\.append\(host\)/g)?.length, 1)
-  assert.match(source, /const viewport = conversationScroll \?\? scroll/)
+  assert.match(source, /\.dsh-synapse-host\{position:absolute;inset:0;/)
+  assert.match(source, /\.dsh-synapse-map-body\{position:relative!important;/)
+  assert.match(source, /conversationScroll = scroll\.closest\('\[data-conversation-scroll\]'\)/)
+  assert.match(source, /if \(conversationScroll === null\) return false/)
+  assert.match(source, /conversationScroll\.append\(host\)/)
+  assert.equal(source.match(/document\.body\.append\(host\)/g)?.length, 2)
+  assert.doesNotMatch(source, /getBoundingClientRect\(\)/)
+  assert.doesNotMatch(source, /host\.style\.(?:left|top|width|height)/)
+  assert.doesNotMatch(source, /window\.addEventListener\('resize'/)
   assert.match(source, /host\.classList\.add\('dsh-synapse-host-visible'\)/)
   assert.match(source, /host\.classList\.remove\('dsh-synapse-host-visible'\)/)
   assert.doesNotMatch(source, /scroll\.replaceChildren|scroll\.append\(canvas\)|host\.append\(canvas\)|canvas-staging/)
